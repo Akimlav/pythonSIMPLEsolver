@@ -55,12 +55,21 @@ To run at **Re = 400**, change `nu = 2.5e-3` (line commented in the code).
 
 ## Results & Validation
 
-Results are validated against the benchmark data of **Ghia et al. (1982)** — the gold standard for lid-driven cavity flow at Re = 100 and Re = 400. The solver plots:
+Results are validated against the benchmark data of **Ghia et al. (1982)** — the gold standard for lid-driven cavity flow at Re = 100. The solver plots:
 
 - Pressure contour field with velocity quiver
 - Streamlines overlaid on the pressure field
 - Centreline **u-velocity** profile at x = 0.5 vs. Ghia data
 - Centreline **v-velocity** profile at y = 0.5 vs. Ghia data
+
+<img width="895" height="626" alt="image" src="https://github.com/user-attachments/assets/8f12c439-1b96-4ee5-9b1c-55020ecffd30" />
+<img width="875" height="625" alt="image" src="https://github.com/user-attachments/assets/ffebb50e-0edc-4ffa-b1c0-1e466e0c41f3" />
+<img width="567" height="453" alt="image" src="https://github.com/user-attachments/assets/6254e8e4-d0fa-455b-9c82-95d0d4c4c779" />
+<img width="587" height="453" alt="image" src="https://github.com/user-attachments/assets/64bc79c8-d2b1-445f-95b4-fc6afd4715d8" />
+
+
+
+
 
 ---
 
@@ -74,6 +83,7 @@ matplotlib
 Install via:
 ```bash
 pip install numpy matplotlib
+pip install numpy numpy
 ```
 
 ---
@@ -84,7 +94,7 @@ pip install numpy matplotlib
 python my_SIMPLE_with_comments.py
 ```
 
-The solver will print iteration counts and display four plots upon completion.
+The solver will print iteration counts, max mass imbalance and display four plots upon completion.
 
 ---
 
