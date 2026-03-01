@@ -11,19 +11,16 @@ import matplotlib.pyplot as plt
 
 
 def apply_velocity_bcs(u, v, U_lid):
-    # Bottom lid (y = 0)
+
     u[0, :] = 0.0
     v[0, :] = 0.0
 
-    # Top wall (y = L)
     u[-1, :] = 0.0
     v[-1, :] = 0.0
 
-    # Left wall (x = 0)
     u[:, 0] = 0.0
     v[:, 0] = 0.0
 
-    # Right wall (x = L)
     u[:, -1] = U_lid
     v[:, -1] = 0.0
 
@@ -54,10 +51,10 @@ apply_velocity_bcs(u, v, U_lid)
 # Under-relaxation
 urf_u = 0.5
 urf_v = 0.5
-urf_p = 0.03
+urf_p = 0.2
 
-n_iter = 1000
-gs_mom = 10
+n_iter = 500
+gs_mom = 15
 gs_p = 50
 
 au_P_arr = np.zeros_like(u)
@@ -103,7 +100,7 @@ for n in range(n_iter):
                 au_N = D_N + max(-Fu_N,0)
                 au_S = D_S + max(Fu_S,0)
 
-                au_P = au_E + au_W + au_N + au_S #+ (Fu_E - Fu_W + Fu_N - Fu_S) + 1e-20 # +1e-20 to avoid 0 division
+                au_P = au_E + au_W + au_N + au_S + (Fu_E - Fu_W + Fu_N - Fu_S) + 1e-20 # +1e-20 to avoid 0 division
 
                 au_P_arr[i,j] = au_P
 
@@ -113,7 +110,7 @@ for n in range(n_iter):
                     au_W * u_star[i-1,j] +
                     au_N * u_star[i,j+1] +
                     au_S * u_star[i,j-1] -
-                    (p[i+1,j] - p[i,j]) * dy
+                    dy * (p[i+1,j] - p[i-1,j]) / 2
                 )
 
                 u_new = rhs / au_P
@@ -122,7 +119,7 @@ for n in range(n_iter):
 
         # BC
         u_star[:, 0]  = 0.0
-        u_star[:, -1] = 1.0
+        u_star[:, -1] = U_lid
         u_star[0, :]  = 0.0
         u_star[-1, :] = 0.0
 
@@ -142,7 +139,7 @@ for n in range(n_iter):
                 av_N = D_N + max(-Fv_N,0)
                 av_S = D_S + max(Fv_S,0)
 
-                av_P = av_E + av_W + av_N + av_S #+ (Fv_E - Fv_W + Fv_N - Fv_S) + 1e-20
+                av_P = av_E + av_W + av_N + av_S + (Fv_E - Fv_W + Fv_N - Fv_S) + 1e-20
 
                 av_P_arr[i, j] = av_P
 
@@ -152,12 +149,12 @@ for n in range(n_iter):
                     av_W * v_star[i-1, j] +
                     av_N * v_star[i, j+1] +
                     av_S * v_star[i, j-1] -
-                    (p[i, j+1] - p[i, j]) * dx
+                    dx * (p[i, j+1] - p[i, j-1]) / 2
                 )
 
                 v_new = rhs / av_P
 
-                # ---- UNDER-RELAXATION (correct) ----
+                # ---- UNDER-RELAXATION ----
                 v_star[i, j] = v[i, j] + urf_v * (v_new - v[i, j])
 
         # ---- Boundary conditions after each sweep ----
@@ -165,72 +162,56 @@ for n in range(n_iter):
         v_star[:, -1] = 0.0
         v_star[0, :]  = 0.0
         v_star[-1, :] = 0.0
+        
+    au_P_arr[0, :]  = au_P_arr[1, :]
+    au_P_arr[-1, :] = au_P_arr[-2, :]
+    au_P_arr[:, 0]  = au_P_arr[:, 1]
+    au_P_arr[:, -1] = au_P_arr[:, -2]
+    
+    av_P_arr[0, :]  = av_P_arr[1, :]
+    av_P_arr[-1, :] = av_P_arr[-2, :]
+    av_P_arr[:, 0]  = av_P_arr[:, 1]
+    av_P_arr[:, -1] = av_P_arr[:, -2]
 
-    # Compute mass imbalance using u_star and v_star using Rhiw - Chow method (it is used for colocated grids)
+    # Compute mass imbalance - Improved Rhie-Chow (consistent & stable)
     for i in range(1, nx-1):
         for j in range(1, ny-1):
-
-            # --- East face ---
+            # East face
             u_E = 0.5*(u_star[i,j] + u_star[i+1,j]) \
-                  - (dy / (au_P_arr[i,j] + au_P_arr[i+1,j])) * (p[i+1,j] - p[i,j])
+                  - 0.5 * dy * (1.0/au_P_arr[i,j] + 1.0/au_P_arr[i+1,j]) * (p[i+1,j] - p[i,j])
             F_E = rho * u_E * dy
-
-
-            # --- West face ---
+            # West face
             u_W = 0.5*(u_star[i-1,j] + u_star[i,j]) \
-                  - (dy / (au_P_arr[i-1,j] + au_P_arr[i,j])) * (p[i,j] - p[i-1,j])
+                  - 0.5 * dy * (1.0/au_P_arr[i-1,j] + 1.0/au_P_arr[i,j]) * (p[i,j] - p[i-1,j])
             F_W = rho * u_W * dy
-
-
-            # --- North face ---
+            # North face
             v_N = 0.5*(v_star[i,j] + v_star[i,j+1]) \
-                  - (dx / (av_P_arr[i,j] + av_P_arr[i,j+1])) * (p[i,j+1] - p[i,j])
+                  - 0.5 * dx * (1.0/av_P_arr[i,j] + 1.0/av_P_arr[i,j+1]) * (p[i,j+1] - p[i,j])
             F_N = rho * v_N * dx
-
-
-            # --- South face ---
+            # South face
             v_S = 0.5*(v_star[i,j-1] + v_star[i,j]) \
-                  - (dx / (av_P_arr[i,j-1] + av_P_arr[i,j])) * (p[i,j] - p[i,j-1])
+                  - 0.5 * dx * (1.0/av_P_arr[i,j-1] + 1.0/av_P_arr[i,j]) * (p[i,j] - p[i,j-1])
             F_S = rho * v_S * dx
-
-            # --- Mass imbalance ---
+            
             bP[i,j] = F_E - F_W + F_N - F_S
-
-    print(f'Mass imbalanve: {sum(sum(bP))}')
-    # Pressure-correction coefficients
+            
+    # print(f'Mass imbalance: {sum(sum(bP))}')
+    print(f'Mass imbalance: {np.max(np.abs(bP))}')
+    
+    # Pressure-correction coefficients - Improved Rhie-Chow (standard & stable)
     for i in range(1, nx-1):
         for j in range(1, ny-1):
-
-            # East
-            a_E_prime[i,j] = (
-                rho * dy * dy
-                / (au_P_arr[i,j] + au_P_arr[i+1,j] + 1e-20)
-            )
-
-            # West
-            a_W_prime[i,j] = (
-                rho * dy * dy
-                / (au_P_arr[i-1,j] + au_P_arr[i,j] + 1e-20)
-            )
-
-            # North
-            a_N_prime[i,j] = (
-                rho * dx * dx
-                / (av_P_arr[i,j] + av_P_arr[i,j+1] + 1e-20)
-            )
-
-            # South
-            a_S_prime[i,j] = (
-                rho * dx * dx
-                / (av_P_arr[i,j-1] + av_P_arr[i,j] + 1e-20)
-            )
-
+            a_E_prime[i,j] = rho * dy * dy * 0.5 * \
+                (1.0/(au_P_arr[i,j] + 1e-20) + 1.0/(au_P_arr[i+1,j] + 1e-20))
+            a_W_prime[i,j] = rho * dy * dy * 0.5 * \
+                (1.0/(au_P_arr[i-1,j] + 1e-20) + 1.0/(au_P_arr[i,j] + 1e-20))
+            a_N_prime[i,j] = rho * dx * dx * 0.5 * \
+                (1.0/(av_P_arr[i,j] + 1e-20) + 1.0/(av_P_arr[i,j+1] + 1e-20))
+            a_S_prime[i,j] = rho * dx * dx * 0.5 * \
+                (1.0/(av_P_arr[i,j-1] + 1e-20) + 1.0/(av_P_arr[i,j] + 1e-20))
             a_P_prime[i,j] = (
-                a_E_prime[i,j]
-              + a_W_prime[i,j]
-              + a_N_prime[i,j]
-              + a_S_prime[i,j]
-              + 1e-20
+                a_E_prime[i,j] + a_W_prime[i,j] +
+                a_N_prime[i,j] + a_S_prime[i,j] + 1e-20
             )
 
 
@@ -261,15 +242,9 @@ for n in range(n_iter):
     # corrected velocities
     for i in range(1, nx-1):
         for j in range(1, ny-1):
-            u[i,j] = u_star[i,j] - (dy / au_P_arr[i,j]) * 0.5 *(p_prime[i+1,j] - p_prime[i-1,j])
-
-            v[i,j] = v_star[i,j] - (dx / av_P_arr[i,j]) * 0.5 *(p_prime[i,j+1] - p_prime[i,j-1])
-
+            u[i,j] = u_star[i,j] - (dy / au_P_arr[i,j]) * (p_prime[i+1,j] - p_prime[i,j])
+            v[i,j] = v_star[i,j] - (dx / av_P_arr[i,j]) * (p_prime[i,j+1] - p_prime[i,j])
     apply_velocity_bcs(u, v, U_lid)
-
-    res_mass = np.max(np.abs(bP))
-
-    print(res_mass)
 
 
 X, Y = np.meshgrid(x, y, indexing='ij')
